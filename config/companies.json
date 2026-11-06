@@ -1,0 +1,17 @@
+[
+  {
+    "ticker": "AAPL",
+    "name": "Apple Inc.",
+    "cik": "0000320193"
+  },
+  {
+    "ticker": "MSFT",
+    "name": "Microsoft Corporation",
+    "cik": "0000789019"
+  },
+  {
+    "ticker": "GOOGL",
+    "name": "Alphabet Inc.",
+    "cik": "0001652044"
+  }
+]
