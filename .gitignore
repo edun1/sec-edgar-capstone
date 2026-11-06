@@ -1,0 +1,11 @@
+﻿.venv/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+!.env.example
+data/
+logs/
+.vscode/
+dbt_packages/
+target/
