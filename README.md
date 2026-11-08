@@ -91,3 +91,21 @@ U.S. Securities and Exchange Commission, SEC EDGAR:
 - https://www.sec.gov/search-filings/edgar-application-programming-interfaces
 - https://data.sec.gov/submissions/CIK0000320193.json
 - https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json
+
+## Local warehouse and dbt (implemented)
+
+The project now uses DuckDB and dbt-duckdb locally; Azure deployment remains deferred. Python selects 90 annual financial observations from 15 original 10-K filings. dbt creates a typed staging view and annual reporting table and runs eight data tests. Exported reporting data feeds Power BI Desktop.
+
+### One-command rebuild
+
+```powershell
+.\run_pipeline.cmd
+```
+
+Uses existing SEC snapshots and ingestion summaries. No downloads occur. See docs/RUN_LOCAL_PIPELINE.md for prerequisites, logs, failure recovery, and Power BI refresh limitations.
+
+### Runner failure-handling tests
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```

@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: landing
+    schema: landing
+    tables:
+      - name: annual_filings
+        description: Original annual filing selections loaded by Python.
+      - name: financial_measures
+        description: Selected financial observations with filing references.

@@ -1,0 +1,8 @@
+1. Make a backup copy of your sec-edgar-capstone project folder.
+2. Open the SEC_EDGAR_Local_Pipeline_Update folder from this ZIP.
+3. Copy its contents into your existing sec-edgar-capstone folder and replace matching SOURCE files. Do not delete your data, logs, .venv, .env or powerbi folders.
+4. From the project root in PowerShell run:
+   .\run_pipeline.cmd
+5. Paste the final terminal output back into the chat. On SUCCESS refresh Power BI manually.
+
+No package installation is needed if the previously installed DuckDB/dbt environment still works. This package retains your requirements-lock.txt. It excludes generated caches, logs, raw data and personal .env settings.

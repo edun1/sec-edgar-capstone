@@ -1,0 +1,15 @@
+name: sec_edgar
+version: "1.0.0"
+config-version: 2
+
+profile: sec_edgar
+
+model-paths: ["models"]
+test-paths: ["tests"]
+
+models:
+  sec_edgar:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table

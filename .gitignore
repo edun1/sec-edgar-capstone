@@ -1,4 +1,4 @@
-﻿.venv/
+.venv/
 __pycache__/
 *.py[cod]
 .env
@@ -9,3 +9,10 @@ logs/
 .vscode/
 dbt_packages/
 target/
+
+# Power BI project local caches and dbt user settings
+**/.pbi/
+**/.user.yml
+*.duckdb
+*.duckdb.wal
+capstone_code_review.zip

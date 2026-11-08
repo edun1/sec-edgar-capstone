@@ -1,2 +1,4 @@
 requests>=2.32,<3
 python-dotenv>=1.0,<2
+dbt-duckdb==1.11.1
+duckdb==1.5.6
