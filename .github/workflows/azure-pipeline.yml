@@ -1,0 +1,72 @@
+name: Azure financial pipeline
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * *'
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: edgar-azure
+  cancel-in-progress: false
+jobs:
+  pipeline:
+    # Scheduled runs stay off until this repository variable is explicitly enabled.
+    if: github.event_name == 'workflow_dispatch' || vars.ENABLE_AZURE_SCHEDULE == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    environment: azure
+    env:
+      AZURE_HOST_STORAGE: ${{ vars.AZURE_HOST_STORAGE }}
+      AZURE_LAKE_STORAGE: ${{ vars.AZURE_LAKE_STORAGE }}
+      AZURE_SQL_HOST: ${{ vars.AZURE_SQL_HOST }}
+      AZURE_SQL_DATABASE: ${{ vars.AZURE_SQL_DATABASE }}
+      AZURE_SQL_SERVER: ${{ vars.AZURE_SQL_SERVER }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      DBT_SEND_ANONYMOUS_USAGE_STATS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Install Microsoft ODBC driver
+        run: |
+          curl --fail --silent --show-error --location https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb -o /tmp/packages-microsoft-prod.deb
+          sudo dpkg -i /tmp/packages-microsoft-prod.deb
+          sudo apt-get update
+          sudo env ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc-dev
+      - name: Install cloud dependencies
+        run: python -m pip install -r azure/requirements-lock.txt
+      - name: Request ingestion and await exact completed run
+        run: python azure/scripts/cloud_run.py
+      - name: Validate downloaded financial records
+        run: python src/check_financial_measures.py
+      - name: Permit only this runner IP in SQL firewall
+        run: |
+          runner_ip=$(curl --fail --silent --show-error https://api.ipify.org)
+          az sql server firewall-rule create --resource-group "$AZURE_RESOURCE_GROUP" --server "$AZURE_SQL_SERVER" --name "gha-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --start-ip-address "$runner_ip" --end-ip-address "$runner_ip"
+      - name: Load isolated build schema
+        run: python azure/scripts/sql_warehouse.py load
+      - name: Build and test Azure SQL models
+        run: dbt build --project-dir azure/dbt --profiles-dir azure/dbt
+      - name: Publish reporting table after successful tests
+        run: python azure/scripts/sql_warehouse.py publish
+      - name: Remove runner firewall rule
+        if: always()
+        run: az sql server firewall-rule delete --resource-group "$AZURE_RESOURCE_GROUP" --server "$AZURE_SQL_SERVER" --name "gha-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --yes
+      - name: Retain run evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: azure-run-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            data/cloud_manifest.json
+            azure/dbt/target/run_results.json
+            azure/dbt/target/manifest.json
+          if-no-files-found: ignore
+          retention-days: 7

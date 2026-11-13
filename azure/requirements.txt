@@ -1,0 +1,6 @@
+# Separate cloud/CI environment. Do not replace the local requirements-lock.txt.
+azure-identity>=1.19,<2
+azure-storage-blob>=12.24,<13
+azure-storage-queue>=12.12,<13
+pyodbc>=5.2,<6
+dbt-sqlserver>=1.9,<1.10
