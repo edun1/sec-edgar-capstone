@@ -11,7 +11,7 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(os.getenv("SEC_EDGAR_PROJECT_ROOT", str(Path(__file__).resolve().parents[1]))).resolve()
 LOGGER = logging.getLogger(__name__)
 
 

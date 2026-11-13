@@ -1,0 +1,7 @@
+version: 2
+sources:
+  - name: landing
+    schema: "{{ env_var('EDGAR_RUN_SCHEMA') }}"
+    tables:
+      - name: raw_annual_filings
+      - name: raw_financial_measures
