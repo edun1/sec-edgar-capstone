@@ -26,6 +26,18 @@ def validate_request_id(value):
     return value
 
 
+def subprocess_environment(workspace, bundle):
+    """Carry the Function worker's package paths into standalone Python scripts."""
+    env = os.environ.copy()
+    paths = [str(bundle / ".python_packages" / "lib" / "site-packages")]
+    paths.extend(path for path in sys.path if path)
+    paths.extend(path for path in env.get("PYTHONPATH", "").split(os.pathsep) if path)
+    env["PYTHONPATH"] = os.pathsep.join(dict.fromkeys(paths))
+    env["SEC_EDGAR_PROJECT_ROOT"] = str(workspace)
+    env["PYTHONIOENCODING"] = "utf-8"
+    return env
+
+
 @app.queue_trigger(arg_name="message", queue_name="ingestion-requests", connection="AzureWebJobsStorage")
 def ingest(message: func.QueueMessage):
     request_id = validate_request_id(json.loads(message.get_body())["request_id"])
@@ -67,9 +79,7 @@ def ingest(message: func.QueueMessage):
             bundle = Path(__file__).resolve().parent
             shutil.copytree(bundle / "src", workspace / "src")
             shutil.copytree(bundle / "config", workspace / "config")
-            env = os.environ.copy()
-            env["SEC_EDGAR_PROJECT_ROOT"] = str(workspace)
-            env["PYTHONIOENCODING"] = "utf-8"
+            env = subprocess_environment(workspace, bundle)
             for script in ["run_ingestion.py", "verify_ingestion.py", "ingest_submission_history.py",
                            "build_annual_filings.py", "build_financial_measures.py", "check_financial_measures.py"]:
                 # Bounded output: private settings are never explicitly printed.
