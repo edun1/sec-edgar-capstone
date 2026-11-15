@@ -33,9 +33,9 @@ def connect():
     )
 
 
-def bootstrap(object_id):
-    # Run once as the configured Entra SQL administrator. No Graph directory lookup.
-    sid = uuid.UUID(object_id).bytes_le.hex()
+def bootstrap(client_id):
+    # Run once as the Entra SQL administrator. Managed identity SID uses its client ID.
+    sid = uuid.UUID(client_id).bytes_le.hex()
     with connect() as cn:
         cur = cn.cursor()
         cur.execute("IF SCHEMA_ID('analytics') IS NULL EXEC('CREATE SCHEMA analytics')")
@@ -95,12 +95,12 @@ def publish():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("action", choices=["bootstrap", "load", "publish"])
-    parser.add_argument("--principal-object-id")
+    parser.add_argument("--principal-client-id")
     args = parser.parse_args()
     if args.action == "bootstrap":
-        if not args.principal_object_id:
-            parser.error("bootstrap needs --principal-object-id")
-        bootstrap(args.principal_object_id)
+        if not args.principal_client_id:
+            parser.error("bootstrap needs --principal-client-id")
+        bootstrap(args.principal_client_id)
     elif args.action == "load":
         load()
     else:
