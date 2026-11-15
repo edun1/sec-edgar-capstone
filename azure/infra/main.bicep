@@ -1,7 +1,9 @@
 targetScope = 'resourceGroup'
 
-@description('Region supporting Functions Flex Consumption and Azure SQL. Verify subscription availability first.')
+@description('Region for Functions, storage and monitoring.')
 param location string = resourceGroup().location
+@description('SQL region; may differ when SQL provisioning is restricted in the primary region. Cross-region transfers can incur charges.')
+param sqlLocation string = location
 @minLength(3)
 @maxLength(7)
 param prefix string = 'edgar'
@@ -186,7 +188,7 @@ resource pipelineContributor 'Microsoft.Authorization/roleAssignments@2022-04-01
 }
 resource sql 'Microsoft.Sql/servers@2023-08-01' = {
   name: '${prefix}-sql-${suffix}'
-  location: location
+  location: sqlLocation
   tags: tags
   properties: {
     version: '12.0'
@@ -203,7 +205,7 @@ resource sql 'Microsoft.Sql/servers@2023-08-01' = {
 resource database 'Microsoft.Sql/servers/databases@2023-08-01' = {
   parent: sql
   name: sqlDatabaseName
-  location: location
+  location: sqlLocation
   tags: tags
   sku: { name: 'Basic'
  tier: 'Basic'
