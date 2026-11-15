@@ -58,7 +58,7 @@ jobs:
         run: python azure/scripts/sql_warehouse.py publish
       - name: Remove runner firewall rule
         if: always()
-        run: az sql server firewall-rule delete --resource-group "$AZURE_RESOURCE_GROUP" --server "$AZURE_SQL_SERVER" --name "gha-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --yes
+        run: az sql server firewall-rule delete --resource-group "$AZURE_RESOURCE_GROUP" --server "$AZURE_SQL_SERVER" --name "gha-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
       - name: Retain run evidence
         if: always()
         uses: actions/upload-artifact@v4
