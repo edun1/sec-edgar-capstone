@@ -41,6 +41,8 @@ def bootstrap(client_id):
         cur.execute("IF SCHEMA_ID('analytics') IS NULL EXEC('CREATE SCHEMA analytics')")
         cur.execute(f"IF USER_ID('edgar_pipeline') IS NULL CREATE USER [edgar_pipeline] WITH SID = 0x{sid}, TYPE = E")
         cur.execute("GRANT CREATE SCHEMA, CREATE TABLE, CREATE VIEW TO [edgar_pipeline]")
+        cur.execute("GRANT VIEW DEFINITION TO [edgar_pipeline]")
+        cur.execute("GRANT SELECT ON OBJECT::sys.sql_expression_dependencies TO [edgar_pipeline]")
         cur.execute("GRANT ALTER, SELECT, INSERT, UPDATE, DELETE ON SCHEMA::analytics TO [edgar_pipeline]")
         cn.commit()
     print("Pipeline database principal provisioned")
