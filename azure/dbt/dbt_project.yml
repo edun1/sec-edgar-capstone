@@ -7,3 +7,4 @@ test-paths: [tests]
 models:
   edgar_azure:
     +materialized: table
+    +as_columnstore: false
