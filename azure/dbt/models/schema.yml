@@ -1,0 +1,24 @@
+version: 2
+
+models:
+  - name: stg_financial_measures
+    description: Typed financial observations from original annual filings.
+    columns:
+      - name: ticker
+        data_tests:
+          - not_null
+      - name: cik
+        data_tests:
+          - not_null
+      - name: period_end
+        data_tests:
+          - not_null
+      - name: measure
+        data_tests:
+          - not_null
+      - name: value
+        data_tests:
+          - not_null
+      - name: accession_number
+        data_tests:
+          - not_null

@@ -1,0 +1,16 @@
+edgar_azure:
+  target: cloud
+  outputs:
+    cloud:
+      type: sqlserver
+      driver: ODBC Driver 18 for SQL Server
+      server: "{{ env_var('AZURE_SQL_HOST') }}"
+      port: 1433
+      database: "{{ env_var('AZURE_SQL_DATABASE') }}"
+      schema: "{{ env_var('EDGAR_RUN_SCHEMA') }}"
+      authentication: CLI
+      encrypt: true
+      trust_cert: false
+      threads: 1
+      login_timeout: 60
+      query_timeout: 300

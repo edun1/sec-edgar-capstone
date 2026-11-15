@@ -16,3 +16,11 @@ target/
 *.duckdb
 *.duckdb.wal
 capstone_code_review.zip
+
+# Azure deployment outputs and private local settings
+azure/function.zip
+azure/functions/local.settings.json
+azure/infra/*.local.json
+azure/deployment-outputs.json
+.venv-azure/
+azure/infra/main.json

@@ -1,0 +1,9 @@
+name: edgar_azure
+version: '1.0.0'
+config-version: 2
+profile: edgar_azure
+model-paths: [models]
+test-paths: [tests]
+models:
+  edgar_azure:
+    +materialized: table
