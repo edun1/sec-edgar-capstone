@@ -16,3 +16,10 @@ target/
 *.duckdb
 *.duckdb.wal
 capstone_code_review.zip
+
+# Azurite local emulator files
+__blobstorage__/
+__queuestorage__/
+__tablestorage__/
+__azurite_db_*.json
+AzuriteConfig
