@@ -12,22 +12,49 @@ from azure.storage.blob import BlobServiceClient
 from cloud_run import verify_manifest
 
 
-def az_value(*args):
-    return subprocess.check_output(['az', *args, '-o', 'tsv', '--only-show-errors'], text=True).strip()
+def hostname_from_site(site):
+    """Accept Azure CLI model and raw ARM property casing without guessing a URL."""
+    for fields in (site, site.get('properties') or {}):
+        for name, value in fields.items():
+            if name.casefold() == 'defaulthostname' and isinstance(value, str):
+                host = value.strip().lower()
+                import re
+                if re.fullmatch(r'[a-z0-9.-]+\.azurewebsites\.net', host):
+                    return host
+    raise RuntimeError('Function metadata contains no valid default hostname')
+
+
+def discover_hostname(group, app):
+    raw = subprocess.check_output(
+        ['az', 'functionapp', 'show', '-g', group, '-n', app, '-o', 'json', '--only-show-errors'],
+        text=True, stderr=subprocess.PIPE)
+    site = json.loads(raw)
+    try:
+        return hostname_from_site(site)
+    except RuntimeError:
+        # Read the unflattened ARM shape when the CLI model omits the field.
+        resource_id = site.get('id')
+        if not isinstance(resource_id, str) or not resource_id.startswith('/subscriptions/'):
+            raise RuntimeError('Azure CLI returned no hostname or Function resource id')
+        raw = subprocess.check_output(
+            ['az', 'rest', '--method', 'get', '--url',
+             'https://management.azure.com' + resource_id + '?api-version=2023-12-01',
+             '-o', 'json', '--only-show-errors'], text=True, stderr=subprocess.PIPE)
+        return hostname_from_site(json.loads(raw))
 
 
 def discover_host_and_key(group, app, attempts=18):
     """Wait for runtime key initialization; never log key values or CLI stderr."""
-    hostname = az_value('functionapp', 'show', '-g', group, '-n', app, '--query', 'defaultHostName')
-    if not hostname or '/' in hostname or not hostname.endswith('.azurewebsites.net'):
-        raise RuntimeError('Function app has no valid Azure defaultHostName')
+    hostname = discover_hostname(group, app)
+    print('PASS: discovered Azure Function hostname', flush=True)
     for attempt in range(attempts):
         try:
             # The default key can be absent immediately after publishing a new HTTP trigger.
             raw = subprocess.check_output(
                 ['az', 'functionapp', 'keys', 'list', '-g', group, '-n', app,
                  '-o', 'json', '--only-show-errors'], text=True, stderr=subprocess.PIPE)
-            keys = json.loads(raw).get('functionKeys') or {}
+            key_response = json.loads(raw)
+            keys = next((v for k, v in key_response.items() if k.casefold() == 'functionkeys'), {}) or {}
             key = keys.get('default') or next((v for v in keys.values() if v), None)
             if key:
                 if os.getenv('GITHUB_ACTIONS') == 'true':
