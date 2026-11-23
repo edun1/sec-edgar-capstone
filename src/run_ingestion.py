@@ -108,10 +108,12 @@ def main():
     logger.info(
         "FINISHED: successful=%s failed=%s", successful, failed
     )
+
     logger.info("Run summary: %s", summary_path)
 
-    return 1 if failed else 0
+    return summary
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    result = main()
+    raise SystemExit(1 if result["failed"] else 0)

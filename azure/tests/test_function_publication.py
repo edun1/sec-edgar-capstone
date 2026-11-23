@@ -19,7 +19,7 @@ class FunctionTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location('function_under_test', path)
         self.module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.module)
-        self.worker = self.module.app.get_functions()[0].get_user_function()
+        self.worker = next(f for f in self.module.app.get_functions() if f.get_function_name() == 'ingest').get_user_function()
         self.message = MagicMock()
         self.message.get_body.return_value = json.dumps({'request_id':'a'*32}).encode()
         self.container = MagicMock()

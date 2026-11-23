@@ -11,6 +11,7 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 import threading
+import uuid
 
 import azure.functions as func
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
@@ -113,3 +114,20 @@ def ingest(message: func.QueueMessage):
         lease.release()
         service.close()
         credential.close()
+
+
+@app.route(route="ingest", methods=["POST"], auth_level=func.AuthLevel.FUNCTION)
+@app.queue_output(arg_name="request", queue_name="ingestion-requests", connection="AzureWebJobsStorage")
+def request_ingestion(req: func.HttpRequest, request: func.Out[str]) -> func.HttpResponse:
+    """Accept a request; the existing queue worker publishes the completed lake run.
+
+    HTTP entry-point contribution: Hephzibah-Techbro (PR #5).
+    A 202 response confirms acceptance only, never successful ingestion.
+    """
+    request_id = uuid.uuid4().hex
+    request.set(json.dumps({"request_id": request_id}))
+    return func.HttpResponse(
+        json.dumps({"status": "accepted", "request_id": request_id,
+                    "manifest_path": f"runs/{request_id}/manifest.json"}),
+        status_code=202, mimetype="application/json",
+    )
