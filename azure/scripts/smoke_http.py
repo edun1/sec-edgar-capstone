@@ -16,19 +16,41 @@ def az_value(*args):
     return subprocess.check_output(['az', *args, '-o', 'tsv', '--only-show-errors'], text=True).strip()
 
 
+def discover_host_and_key(group, app, attempts=18):
+    """Wait for runtime key initialization; never log key values or CLI stderr."""
+    hostname = az_value('functionapp', 'show', '-g', group, '-n', app, '--query', 'defaultHostName')
+    if not hostname or '/' in hostname or not hostname.endswith('.azurewebsites.net'):
+        raise RuntimeError('Function app has no valid Azure defaultHostName')
+    for attempt in range(attempts):
+        try:
+            # The default key can be absent immediately after publishing a new HTTP trigger.
+            raw = subprocess.check_output(
+                ['az', 'functionapp', 'keys', 'list', '-g', group, '-n', app,
+                 '-o', 'json', '--only-show-errors'], text=True, stderr=subprocess.PIPE)
+            keys = json.loads(raw).get('functionKeys') or {}
+            key = keys.get('default') or next((v for v in keys.values() if v), None)
+            if key:
+                if os.getenv('GITHUB_ACTIONS') == 'true':
+                    print('::add-mask::' + key, flush=True)
+                return hostname, key
+        except subprocess.CalledProcessError:
+            pass
+        print(f'Waiting for Function runtime host keys ({attempt + 1}/{attempts})', flush=True)
+        if attempt + 1 < attempts:
+            time.sleep(10)
+    raise RuntimeError('Function host is known, but no host invocation key became available. '
+                       'Inspect Function startup logs and host-storage identity settings; '
+                       'no key values were printed or changed.')
+
+
 def main():
     group = os.environ['AZURE_RESOURCE_GROUP']
     app = os.environ['AZURE_FUNCTION_NAME']
-    hostname = az_value('functionapp', 'show', '-g', group, '-n', app, '--query', 'defaultHostName')
-    key = az_value('functionapp', 'keys', 'list', '-g', group, '-n', app, '--query', 'functionKeys.default')
-    if not key or not hostname or '/' in hostname:
-        raise RuntimeError('Missing Function host or default key')
-    if os.getenv('GITHUB_ACTIONS') == 'true':
-        print('::add-mask::' + key, flush=True)
+    hostname, key = discover_host_and_key(group, app)
     url = 'https://' + hostname + '/api/ingest'
     # Deployment trigger synchronization may take a short time.
     for attempt in range(12):
-        response = requests.post(url, timeout=30)
+        response = requests.post(url, timeout=30, allow_redirects=False)
         if response.status_code in (401, 403):
             break
         if response.status_code not in (404, 502, 503):
@@ -37,7 +59,7 @@ def main():
     else:
         raise RuntimeError('Protected endpoint did not become available')
     print('PASS: unauthenticated POST rejected', flush=True)
-    response = requests.post(url, headers={'x-functions-key': key}, timeout=60)
+    response = requests.post(url, headers={'x-functions-key': key}, timeout=60, allow_redirects=False)
     if response.status_code != 202:
         raise RuntimeError(f'Authenticated endpoint returned HTTP {response.status_code}; expected 202')
     body = response.json()
