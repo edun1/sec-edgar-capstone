@@ -23,3 +23,10 @@ __queuestorage__/
 __tablestorage__/
 __azurite_db_*.json
 AzuriteConfig
+# Azure deployment outputs and private local settings
+azure/function.zip
+azure/functions/local.settings.json
+azure/infra/*.local.json
+azure/deployment-outputs.json
+.venv-azure/
+azure/infra/main.json

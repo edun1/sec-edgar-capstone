@@ -1,0 +1,19 @@
+name: Azure preparation checks
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-checks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r azure/functions/requirements.txt
+      - run: python -m compileall -q src azure
+      - run: python -m unittest discover -s azure/tests -v
+      - name: Compile infrastructure without deployment
+        run: az bicep build --file azure/infra/main.bicep --outfile /tmp/edgar-arm.json

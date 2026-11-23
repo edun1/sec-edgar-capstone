@@ -1,0 +1,133 @@
+"""Queue-triggered SEC extraction. Publishes one complete, hash-addressed run."""
+import hashlib
+import json
+import logging
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+from datetime import datetime, timezone
+import threading
+import uuid
+
+import azure.functions as func
+from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
+from azure.identity import DefaultAzureCredential
+from azure.storage.blob import BlobServiceClient
+
+app = func.FunctionApp()
+
+
+def validate_request_id(value):
+    if not isinstance(value, str) or not re.fullmatch(r"[a-f0-9]{32}", value):
+        raise ValueError("request_id must be a 32-character lowercase hex UUID")
+    return value
+
+
+def subprocess_environment(workspace, bundle):
+    """Carry the Function worker's package paths into standalone Python scripts."""
+    env = os.environ.copy()
+    paths = [str(bundle / ".python_packages" / "lib" / "site-packages")]
+    paths.extend(path for path in sys.path if path)
+    paths.extend(path for path in env.get("PYTHONPATH", "").split(os.pathsep) if path)
+    env["PYTHONPATH"] = os.pathsep.join(dict.fromkeys(paths))
+    env["SEC_EDGAR_PROJECT_ROOT"] = str(workspace)
+    env["PYTHONIOENCODING"] = "utf-8"
+    return env
+
+
+@app.queue_trigger(arg_name="message", queue_name="ingestion-requests", connection="AzureWebJobsStorage")
+def ingest(message: func.QueueMessage):
+    request_id = validate_request_id(json.loads(message.get_body())["request_id"])
+    credential = DefaultAzureCredential()
+    service = BlobServiceClient(os.environ["EDGAR_LAKE_URL"], credential=credential)
+    container = service.get_container_client(os.getenv("EDGAR_CONTAINER", "edgar"))
+    lock = container.get_blob_client(f"locks/{request_id}")
+    try:
+        lock.upload_blob(b"lock", overwrite=False)
+    except ResourceExistsError:
+        pass
+    # Lease renewals protect against duplicate delivery; expiry permits recovery after a crash.
+    lease = lock.acquire_lease(lease_duration=60)
+    stopped = threading.Event()
+    lease_error = []
+
+    def renew():
+        while not stopped.wait(20):
+            try:
+                lease.renew()
+            except Exception as error:
+                lease_error.append(error)
+                return
+
+    thread = threading.Thread(target=renew, daemon=True)
+    thread.start()
+    manifest_blob = container.get_blob_client(f"runs/{request_id}/manifest.json")
+    try:
+        try:
+            previous = json.loads(manifest_blob.download_blob().readall())
+            if previous.get("status") == "complete":
+                logging.info("Already completed request %s", request_id)
+                return
+        except ResourceNotFoundError:
+            pass
+
+        with tempfile.TemporaryDirectory(prefix="edgar-") as folder:
+            workspace = Path(folder)
+            bundle = Path(__file__).resolve().parent
+            shutil.copytree(bundle / "src", workspace / "src")
+            shutil.copytree(bundle / "config", workspace / "config")
+            env = subprocess_environment(workspace, bundle)
+            for script in ["run_ingestion.py", "verify_ingestion.py", "ingest_submission_history.py",
+                           "build_annual_filings.py", "build_financial_measures.py", "check_financial_measures.py"]:
+                # Bounded output: private settings are never explicitly printed.
+                subprocess.run([sys.executable, str(workspace / "src" / script)],
+                               env=env, cwd=workspace, check=True, timeout=900)
+            if lease_error:
+                raise RuntimeError("Lost the ingestion request lease")
+            files = []
+            for subdir in ["data", "logs"]:
+                for path in sorted((workspace / subdir).rglob("*")):
+                    if path.is_file():
+                        content = path.read_bytes()
+                        relative = path.relative_to(workspace).as_posix()
+                        blob_path = f"runs/{request_id}/{relative}"
+                        container.upload_blob(blob_path, content, overwrite=True)
+                        files.append({"path": relative, "blob": blob_path,
+                                      "bytes": len(content), "sha256": hashlib.sha256(content).hexdigest()})
+            summary_path = next((workspace / "logs").glob("ingestion_*_summary.json"))
+            summary = json.loads(summary_path.read_text())
+            if lease_error:
+                raise RuntimeError("Lost the ingestion request lease")
+            manifest = {"request_id": request_id, "status": "complete",
+                        "ingestion_run_id": summary["run_id"],
+                        "completed_at_utc": datetime.now(timezone.utc).isoformat(), "files": files}
+            # Readiness marker is written last, only after all source/cleaned bytes are stored.
+            manifest_blob.upload_blob(json.dumps(manifest, indent=2), overwrite=True)
+            logging.info("Completed request %s ingestion=%s", request_id, summary["run_id"])
+    finally:
+        stopped.set()
+        thread.join(timeout=5)
+        lease.release()
+        service.close()
+        credential.close()
+
+
+@app.route(route="ingest", methods=["POST"], auth_level=func.AuthLevel.FUNCTION)
+@app.queue_output(arg_name="request", queue_name="ingestion-requests", connection="AzureWebJobsStorage")
+def request_ingestion(req: func.HttpRequest, request: func.Out[str]) -> func.HttpResponse:
+    """Accept a request; the existing queue worker publishes the completed lake run.
+
+    HTTP entry-point contribution: Hephzibah-Techbro (PR #5).
+    A 202 response confirms acceptance only, never successful ingestion.
+    """
+    request_id = uuid.uuid4().hex
+    request.set(json.dumps({"request_id": request_id}))
+    return func.HttpResponse(
+        json.dumps({"status": "accepted", "request_id": request_id,
+                    "manifest_path": f"runs/{request_id}/manifest.json"}),
+        status_code=202, mimetype="application/json",
+    )

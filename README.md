@@ -109,3 +109,7 @@ Uses existing SEC snapshots and ingestion summaries. No downloads occur. See doc
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
+
+## Azure deployment preparation
+
+See [azure/README.md](azure/README.md) for the prepared ADLS Gen2, queue-triggered Azure Function, Azure SQL and dbt deployment path. Cloud dependencies, models and workflows are separate from the working local pipeline. Deployment is not yet cloud-verified; scheduled execution is disabled by default.

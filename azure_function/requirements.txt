@@ -1,5 +1,0 @@
-azure-functions
-azure-storage-file-datalake
-azure-identity
-requests
-python-dotenv
