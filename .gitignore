@@ -30,3 +30,5 @@ azure/infra/*.local.json
 azure/deployment-outputs.json
 .venv-azure/
 azure/infra/main.json
+
+azure/http-smoke-result.json
